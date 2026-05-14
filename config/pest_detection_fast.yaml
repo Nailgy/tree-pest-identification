@@ -1,0 +1,52 @@
+# YOLO11n Fast Testing Configuration (30-60 min training)
+# Use for pipeline validation and quick testing
+
+# Model (smaller, faster)
+model: yolo11n.pt
+task: detect
+
+# Training (reduced)
+epochs: 50              # Reduced from 150
+patience: 10            # Reduced from 20
+save_period: 10
+
+# Hardware optimization
+img_size: 512           # Reduced from 640 (faster)
+batch_size: 16          # Increased (smaller model allows more)
+workers: 8
+accumulate: 1           # No accumulation needed
+amp: true
+
+# Optimizer
+optimizer: AdamW
+lr0: 0.01
+lrf: 0.001
+momentum: 0.937
+weight_decay: 0.0005
+warmup_epochs: 3
+cos_lr: true
+
+# Augmentation (lighter)
+hsv_h: 0.015
+hsv_s: 0.7
+hsv_v: 0.4
+degrees: 15.0
+translate: 0.1
+scale: 0.5
+flipud: 0.2
+fliplr: 0.5
+mosaic: 1.0
+mixup: 0.1
+
+# Validation
+val: true
+plots: true
+save_json: true
+
+# Device
+device: cuda:0
+
+# Project paths
+project: models/pest_detection_fast
+name: train
+exist_ok: false

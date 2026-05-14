@@ -1,0 +1,59 @@
+# YOLO11m Pest Detection Configuration
+# Optimized for RTX 4070 Laptop (8GB VRAM) + 103 pest classes
+
+# Model
+model: yolo11m.pt
+task: detect
+
+# Training
+epochs: 150
+patience: 20
+save_period: 10
+
+# Hardware optimization (103 classes)
+img_size: 640
+batch_size: 8           # Safe for 103 classes on 8GB VRAM
+workers: 8              # i9-13900HX has 24 threads
+accumulate: 2           # Effective batch = 16
+amp: true               # Mixed precision (critical for VRAM)
+
+# Optimizer
+optimizer: AdamW
+lr0: 0.01
+lrf: 0.001
+momentum: 0.937
+weight_decay: 0.0005
+warmup_epochs: 5
+warmup_momentum: 0.8
+warmup_bias_lr: 0.1
+cos_lr: true
+
+# Augmentation (YOLO built-in)
+hsv_h: 0.02
+hsv_s: 0.8
+hsv_v: 0.5
+degrees: 30.0
+translate: 0.15
+scale: 0.6
+shear: 5.0
+perspective: 0.001
+flipud: 0.3
+fliplr: 0.5
+mosaic: 1.0
+mixup: 0.2
+copy_paste: 0.1         # Good for small objects (pests)
+close_mosaic: 10        # Disable mosaic in last 10 epochs
+
+# Validation
+val: true
+plots: true
+save_json: true
+save_hybrid: false
+
+# Device
+device: cuda:0
+
+# Project paths
+project: models/pest_detection
+name: train
+exist_ok: false

@@ -1,0 +1,38 @@
+# Core ML Framework (CUDA 12.x optimized)
+torch==2.5.1+cu124
+torchvision==0.20.1+cu124
+--find-links https://download.pytorch.org/whl/torch_stable.html
+
+# YOLO & Computer Vision
+ultralytics==8.3.42
+sahi==0.11.18
+opencv-python-headless==4.10.0.84
+albumentations==1.4.20
+
+# Data Handling
+roboflow==1.1.44
+pyyaml==6.0.2
+pandas==2.2.3
+numpy==1.26.4
+Pillow==11.0.0
+
+# Metrics & Visualization
+scikit-learn==1.6.0
+matplotlib==3.9.2
+seaborn==0.13.2
+plotly==5.24.1
+
+# Memory & Performance
+psutil==6.1.0
+py3nvml==0.2.7
+tqdm==4.67.1
+
+# Utilities
+python-dotenv==1.0.1
+loguru==0.7.3
+pydantic==2.10.3
+typer==0.15.1
+rich==13.9.4
+
+# Data Validation
+jsonschema==4.23.0

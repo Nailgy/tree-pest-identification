@@ -1,0 +1,35 @@
+# SAHI Configuration for 4K Image Inference
+# Slicing Aided Hyper Inference for handling high-resolution images
+
+# Slice parameters (match training img_size)
+slice_height: 640
+slice_width: 640
+
+# Overlap ratios (prevent missing objects at boundaries)
+overlap_height_ratio: 0.2      # 20% overlap
+overlap_width_ratio: 0.2       # 20% overlap
+
+# Post-processing
+postprocess_type: NMS          # Non-Maximum Suppression
+postprocess_match_metric: IOS  # Intersection Over Smaller (better for small objects)
+postprocess_match_threshold: 0.5
+postprocess_class_agnostic: false
+
+# Model parameters
+confidence_threshold: 0.25
+iou_threshold: 0.45
+
+# Performance
+verbose: 1                     # 0: silent, 1: basic, 2: detailed
+auto_slice_resolution: true    # Automatically determine optimal slice size
+
+# Visualization
+export_visual: true            # Save annotated images
+export_pickle: false           # Don't save pickle files
+export_crop: false             # Don't save cropped detections
+
+# Device
+device: cuda:0
+
+# Batch processing
+batch_size: 1                  # Process one image at a time (safer for VRAM)
