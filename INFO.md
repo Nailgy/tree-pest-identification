@@ -52,14 +52,24 @@ source venv/bin/activate
 
 ### 3. Install Dependencies
 
+**Important**: PyTorch with CUDA support needs special installation. See `PYTORCH_INSTALL.md` for detailed steps.
+
+**Quick version:**
 ```bash
-# Install all required packages (this may take 10-15 minutes)
+# Step 1: Install PyTorch with CUDA 12.4
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# Step 2: Install remaining dependencies
 pip install -r requirements.txt
 
 # Verify installation
 pip list | grep torch
 pip list | grep ultralytics
 ```
+
+**If you get "Could not find version" error:**
+- See `PYTORCH_INSTALL.md` for troubleshooting
+- Try CUDA 12.1: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121`
 
 ### 4. Verify GPU Access
 

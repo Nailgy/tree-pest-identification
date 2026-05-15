@@ -44,12 +44,17 @@ tree-pest-identification/
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install dependencies
+# Install PyTorch with CUDA 12.x support (IMPORTANT - do this first!)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+# Install remaining dependencies
 pip install -r requirements.txt
 
 # Verify GPU
 python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}')"
 ```
+
+**If you get "Could not find version" error**, see `PYTORCH_INSTALL.md` for detailed troubleshooting.
 
 ### 2. Download Dataset
 
