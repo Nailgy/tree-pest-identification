@@ -1,11 +1,11 @@
 # IMPORTANT: Install PyTorch FIRST separately with CUDA support!
 # Run this BEFORE pip install -r requirements.txt:
-# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+# pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
 #
 # Then run: pip install -r requirements.txt
 
 # YOLO & Computer Vision
-ultralytics==8.3.42
+ultralytics==8.3.40
 sahi==0.11.18
 opencv-python-headless==4.10.0.84
 albumentations==1.4.20
