@@ -56,7 +56,7 @@ class AugmentationConfig(BaseModel):
 
     minority_percentile: int = Field(ge=1, le=50, default=10)
     target_samples_per_class: int = Field(ge=10, le=10000, default=100)
-    severity: str = Field(default="medium", regex="^(light|medium|heavy)$")
+    severity: str = Field(default="medium", pattern="^(light|medium|heavy)$")
     preserve_aspect_ratio: bool = Field(default=True)
     interpolation: str = Field(default="bilinear")
 
