@@ -183,10 +183,7 @@ def train_pest_detector(
             # Project
             project=config_dict['project'],
             name=config_dict['name'],
-            exist_ok=config_dict['exist_ok'],
-
-            # Callbacks
-            callbacks=callbacks
+            exist_ok=config_dict['exist_ok']
         )
 
         logger.info("\n" + "=" * 80)
