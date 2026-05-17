@@ -1,128 +1,97 @@
 #!/usr/bin/env python3
-"""
-Download dataset from Roboflow with retry logic and progress tracking.
-"""
+"""Download Roboflow dataset via direct ZIP download."""
 import argparse
 from pathlib import Path
 import sys
+import zipfile
+import requests
 from loguru import logger
-from roboflow import Roboflow
 
-# Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent))
-
 from src.core.logger import setup_logger
 
 
-def download_roboflow_dataset(
-    url: str,
-    output_dir: Path,
-    format: str = "yolov11"
+def download_roboflow_zip(
+    api_key: str,
+    workspace: str,
+    project: str,
+    version: int,
+    output_dir: Path
 ) -> Path:
-    """
-    Download dataset from Roboflow.
+    """Download Roboflow dataset as ZIP and extract."""
+    logger.info(f"Downloading {workspace}/{project} v{version}")
 
-    Args:
-        url: Roboflow dataset URL
-        output_dir: Output directory
-        format: Dataset format (yolov11, yolov8, coco, etc.)
+    # Construct download URL
+    url = f"https://app.roboflow.com/api/project/{project}/dataset/{version}/download?api_key={api_key}"
 
-    Returns:
-        Path to downloaded dataset
-    """
-    logger.info(f"Downloading dataset from Roboflow to: {output_dir}")
+    logger.info(f"Download URL: {url}")
 
-    # Extract API key from URL
-    # Format: https://app.roboflow.com/ds/YrFRz3Bfo9?key=Hey4UNMjA7
-    if "?key=" in url:
-        workspace_url, api_key = url.split("?key=")
-        dataset_id = workspace_url.split("/ds/")[1]
-    else:
-        raise ValueError("URL must contain API key (?key=YOUR_KEY)")
-
-    # Initialize Roboflow
-    rf = Roboflow(api_key=api_key)
-
-    # Get project
-    logger.info(f"Fetching dataset: {dataset_id}")
-    project = rf.workspace().project(dataset_id)
-
-    # Download dataset
+    # Download ZIP
     output_dir.mkdir(parents=True, exist_ok=True)
-    dataset = project.version(1).download(
-        model_format=format,
-        location=str(output_dir)
-    )
+    zip_path = output_dir / "dataset.zip"
 
-    logger.info(f"Dataset downloaded successfully to: {dataset.location}")
+    logger.info(f"Downloading to: {zip_path}")
 
-    # Verify download
-    data_yaml = Path(dataset.location) / "data.yaml"
-    if not data_yaml.exists():
-        raise FileNotFoundError(f"data.yaml not found: {data_yaml}")
+    response = requests.get(url, stream=True)
+    if response.status_code != 200:
+        raise ValueError(f"Download failed: {response.status_code} - {response.text}")
 
-    # Check directories
-    train_dir = Path(dataset.location) / "train"
-    valid_dir = Path(dataset.location) / "valid"
+    # Save ZIP
+    total_size = int(response.headers.get('content-length', 0))
+    with open(zip_path, 'wb') as f:
+        downloaded = 0
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+                downloaded += len(chunk)
 
-    if not train_dir.exists():
-        raise FileNotFoundError(f"Train directory not found: {train_dir}")
-    if not valid_dir.exists():
-        logger.warning(f"Valid directory not found: {valid_dir}")
+    logger.info(f"ZIP saved: {zip_path} ({zip_path.stat().st_size / 1024 / 1024:.1f} MB)")
 
-    # Count images
-    train_images = list(train_dir.glob("images/*.jpg")) + list(train_dir.glob("images/*.png"))
-    train_labels = list(train_dir.glob("labels/*.txt"))
+    # Check if it's actually a zip
+    if zip_path.stat().st_size < 1000:
+        # Too small, probably an error message
+        with open(zip_path, 'r', errors='ignore') as f:
+            content = f.read()
+            logger.error(f"Response content: {content}")
+            if 'error' in content.lower():
+                raise ValueError(f"API error: {content}")
+            raise ValueError(f"Downloaded file too small: {zip_path.stat().st_size} bytes")
 
-    logger.info(
-        f"Dataset verification:\n"
-        f"  - Train images: {len(train_images)}\n"
-        f"  - Train labels: {len(train_labels)}\n"
-        f"  - Data YAML: {data_yaml}"
-    )
+    # Extract
+    logger.info(f"Extracting to: {output_dir}")
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(output_dir)
 
-    return Path(dataset.location)
+    # Verify
+    data_yaml = output_dir / "data.yaml"
+    if data_yaml.exists():
+        logger.info(f"✓ Dataset extracted successfully")
+        logger.info(f"✓ data.yaml found at: {data_yaml}")
+        return output_dir
+    else:
+        raise FileNotFoundError(f"data.yaml not found after extraction")
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Download pest detection dataset from Roboflow"
-    )
-    parser.add_argument(
-        "--url",
-        type=str,
-        required=True,
-        help="Roboflow dataset URL with API key"
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path("data/raw/pests"),
-        help="Output directory (default: data/raw/pests)"
-    )
-    parser.add_argument(
-        "--format",
-        type=str,
-        default="yolov11",
-        choices=["yolov11", "yolov8", "yolov5", "coco"],
-        help="Dataset format (default: yolov11)"
-    )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--api-key", required=True)
+    parser.add_argument("--workspace", required=True)
+    parser.add_argument("--project", required=True)
+    parser.add_argument("--version", type=int, default=1)
+    parser.add_argument("--output", type=Path, default=Path("data/raw/pests"))
 
     args = parser.parse_args()
-
-    # Setup logger
     setup_logger(level="INFO")
 
     try:
-        dataset_path = download_roboflow_dataset(
-            url=args.url,
-            output_dir=args.output,
-            format=args.format
+        download_roboflow_zip(
+            api_key=args.api_key,
+            workspace=args.workspace,
+            project=args.project,
+            version=args.version,
+            output_dir=args.output
         )
-
-        logger.info(f"✓ Dataset ready at: {dataset_path}")
-        logger.info(f"✓ Next step: python scripts/analyze_dataset.py --dataset {dataset_path}")
-
+        logger.info(f"✓ Ready for training: {args.output}")
     except Exception as e:
         logger.error(f"Download failed: {e}")
         sys.exit(1)
