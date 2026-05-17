@@ -59,9 +59,9 @@ python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}')"
 ### 2. Download Dataset
 
 ```bash
-# Download 75k pest images from Roboflow
+# Download pest images from Roboflow
 python scripts/download_dataset.py \
-    --url "https://app.roboflow.com/ds/YrFRz3Bfo9?key=YOUR_KEY" \
+    --url "https://app.roboflow.com/ds/EGdwov1ZOb?key=CTBOjtBxlx" \
     --output data/raw/pests
 ```
 

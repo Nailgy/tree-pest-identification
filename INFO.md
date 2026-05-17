@@ -91,19 +91,18 @@ If this fails, install CUDA 12.x drivers from NVIDIA.
 
 ## 📦 Download Dataset
 
-### Get Roboflow API Key
+### Roboflow Dataset URL
 
-You'll need the Roboflow dataset URL with API key:
 ```
-https://app.roboflow.com/ds/YrFRz3Bfo9?key=Hey4UNMjA7
+https://app.roboflow.com/ds/EGdwov1ZOb?key=CTBOjtBxlx
 ```
 
 ### Download Command
 
 ```bash
-# Download 75k pest images (~10-30 minutes depending on connection)
+# Download pest images (~10-30 minutes depending on connection)
 python scripts/download_dataset.py \
-    --url "https://app.roboflow.com/ds/YrFRz3Bfo9?key=Hey4UNMjA7" \
+    --url "https://app.roboflow.com/ds/EGdwov1ZOb?key=CTBOjtBxlx" \
     --output data/raw/pests
 ```
 
