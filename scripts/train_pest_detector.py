@@ -42,7 +42,7 @@ def train_pest_detector(
     # Load configuration
     logger.info(f"Loading config from: {config_path}")
     config = load_training_config(config_path)
-    config_dict = config.dict()
+    config_dict = config.model_dump()
 
     # Verify data YAML exists
     if not data_yaml.exists():
@@ -136,7 +136,7 @@ def train_pest_detector(
 
     try:
         results = model.train(
-            data=str(data_yaml),
+            data=str(data_yaml.resolve()),
             epochs=config_dict['epochs'],
             patience=config_dict['patience'],
             save_period=config_dict['save_period'],

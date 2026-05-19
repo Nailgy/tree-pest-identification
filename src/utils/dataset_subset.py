@@ -80,9 +80,11 @@ def create_dataset_subset(
     with open(source_dir / "data.yaml", 'r') as f:
         data_config = yaml.safe_load(f)
 
-    # Update paths
-    data_config['train'] = str(output_dir / "train" / "images")
-    data_config['val'] = str(output_dir / "valid" / "images")
+    # Use an absolute dataset root with relative split paths to prevent
+    # Ultralytics from prefixing paths twice (which causes missing image errors).
+    data_config['path'] = str(output_dir.resolve())
+    data_config['train'] = "train/images"
+    data_config['val'] = "valid/images"
 
     subset_yaml = output_dir / "data.yaml"
     with open(subset_yaml, 'w') as f:
