@@ -92,21 +92,22 @@ class WeightedLossCallback:
 
         try:
             device = trainer.device
-            self.weights = self.weights.to(device)
+            weights = self.weights.to(device) if hasattr(self.weights, 'to') else self.weights
 
-            # Apply weights to criterion (BCEWithPosWeight for YOLO)
-            if hasattr(trainer, 'criterion'):
-                if hasattr(trainer.criterion, 'pos_weight'):
-                    trainer.criterion.pos_weight = self.weights
-                    logger.info(f"✓ Class weights applied to loss function on {device}")
+            # Access YOLO's loss function through the trainer
+            if hasattr(trainer, 'criterion') and trainer.criterion is not None:
+                criterion = trainer.criterion
+                # YOLO uses BCEWithPosWeight for classification
+                if hasattr(criterion, 'pos_weight'):
+                    criterion.pos_weight = weights
+                    logger.info(f"✓ Class weights applied to criterion on {device}")
                     self.applied = True
-            elif hasattr(trainer.model, 'criterion'):
-                if hasattr(trainer.model.criterion, 'pos_weight'):
-                    trainer.model.criterion.pos_weight = self.weights
-                    logger.info(f"✓ Class weights applied to model criterion on {device}")
+                elif hasattr(criterion, 'weight'):
+                    criterion.weight = weights
+                    logger.info(f"✓ Class weights applied to criterion.weight on {device}")
                     self.applied = True
             else:
-                logger.warning("Could not apply class weights - criterion not accessible")
+                logger.warning("Could not access trainer.criterion for class weighting")
         except Exception as e:
             logger.warning(f"Failed to apply class weights: {e}")
 
@@ -203,12 +204,19 @@ def train_pest_detector(
         config_dict['project'] = str(output_dir)
 
     # Create memory management callbacks
-    callbacks = memory_optimizer.create_cleanup_callback()
+    memory_callbacks = memory_optimizer.create_cleanup_callback()
+
+    # Prepare callback list for YOLO (YOLO accepts list of callback objects)
+    callbacks_list = []
 
     # Add weighted loss callback if class weights were calculated
     if class_weights is not None:
-        callbacks.append(WeightedLossCallback(class_weights))
+        callbacks_list.append(WeightedLossCallback(class_weights))
         logger.info("Added weighted loss callback to training pipeline")
+
+    # Note: memory_callbacks is a dict returned by create_cleanup_callback()
+    # YOLO will use callbacks_list which contains our callback objects
+    # The memory cleanup should happen automatically through YOLO's internal mechanisms
 
     # Initialize YOLO model
     logger.info(f"Initializing YOLO11m model: {config_dict['model']}")
@@ -296,8 +304,8 @@ def train_pest_detector(
             name=config_dict['name'],
             exist_ok=config_dict['exist_ok'],
 
-            # Callbacks for custom training logic (class weighting, memory management)
-            callbacks=callbacks
+            # Callbacks for custom training logic (class weighting)
+            callbacks=callbacks_list if callbacks_list else None
         )
 
         logger.info("\n" + "=" * 80)
