@@ -7,6 +7,9 @@ import argparse
 from pathlib import Path
 import sys
 import yaml
+import numpy as np
+from collections import Counter
+import torch
 from ultralytics import YOLO
 from loguru import logger
 
@@ -18,6 +21,94 @@ from src.core.config_loader import load_training_config
 from src.core.device_manager import DeviceManager
 from src.training.memory_optimizer import MemoryOptimizer, estimate_vram_usage
 from src.data.augmentation_engine import StorageEfficientAugmentation
+
+
+def calculate_class_weights(data_yaml_path, num_classes):
+    """Calculate inverse frequency weights for class balancing.
+
+    Weight formula: weight_i = max_frequency / frequency_i
+    Normalized so mean weight = 1.0
+    """
+    logger.info("Calculating class weights from dataset...")
+
+    class_counts = Counter()
+    train_dir = Path(data_yaml_path).parent / 'train' / 'labels'
+
+    if not train_dir.exists():
+        logger.warning(f"Train labels directory not found: {train_dir}")
+        return None
+
+    # Count instances per class from label files
+    label_files = list(train_dir.glob('*.txt'))
+    logger.info(f"Scanning {len(label_files)} label files...")
+
+    for label_file in label_files:
+        try:
+            with open(label_file, 'r') as f:
+                for line in f:
+                    parts = line.strip().split()
+                    if parts:
+                        class_id = int(parts[0])
+                        class_counts[class_id] += 1
+        except Exception as e:
+            logger.warning(f"Error reading {label_file}: {e}")
+
+    if not class_counts:
+        logger.warning("No class instances found in dataset")
+        return None
+
+    # Calculate inverse frequency weights
+    max_count = max(class_counts.values())
+    min_count = min(class_counts.values())
+
+    weights = np.zeros(num_classes, dtype=np.float32)
+    for class_id in range(num_classes):
+        count = class_counts.get(class_id, 1)
+        weights[class_id] = max_count / (count + 1)
+
+    # Normalize to mean=1.0
+    weights = weights / weights.mean()
+
+    logger.info(f"\nClass Weight Statistics:")
+    logger.info(f"  - Min class count: {min_count}")
+    logger.info(f"  - Max class count: {max_count}")
+    logger.info(f"  - Weight range: [{weights.min():.3f}, {weights.max():.3f}]")
+    logger.info(f"  - Mean weight: {weights.mean():.3f}")
+
+    return torch.tensor(weights, dtype=torch.float32)
+
+
+class WeightedLossCallback:
+    """Callback to apply class weights to YOLO's loss function during training."""
+
+    def __init__(self, weights):
+        self.weights = weights
+        self.applied = False
+
+    def on_train_start(self, trainer):
+        """Apply class weights when training starts."""
+        if self.weights is None or self.applied:
+            return
+
+        try:
+            device = trainer.device
+            self.weights = self.weights.to(device)
+
+            # Apply weights to criterion (BCEWithPosWeight for YOLO)
+            if hasattr(trainer, 'criterion'):
+                if hasattr(trainer.criterion, 'pos_weight'):
+                    trainer.criterion.pos_weight = self.weights
+                    logger.info(f"✓ Class weights applied to loss function on {device}")
+                    self.applied = True
+            elif hasattr(trainer.model, 'criterion'):
+                if hasattr(trainer.model.criterion, 'pos_weight'):
+                    trainer.model.criterion.pos_weight = self.weights
+                    logger.info(f"✓ Class weights applied to model criterion on {device}")
+                    self.applied = True
+            else:
+                logger.warning("Could not apply class weights - criterion not accessible")
+        except Exception as e:
+            logger.warning(f"Failed to apply class weights: {e}")
 
 
 def train_pest_detector(
@@ -57,6 +148,9 @@ def train_pest_detector(
     num_classes = data_config.get('nc', 103)
     class_names = data_config.get('names', [])
     logger.info(f"Number of classes: {num_classes}")
+
+    # Calculate class weights for imbalanced dataset
+    class_weights = calculate_class_weights(data_yaml, num_classes)
 
     # Initialize device manager
     device_manager = DeviceManager(device=config_dict['device'])
@@ -110,6 +204,11 @@ def train_pest_detector(
 
     # Create memory management callbacks
     callbacks = memory_optimizer.create_cleanup_callback()
+
+    # Add weighted loss callback if class weights were calculated
+    if class_weights is not None:
+        callbacks.append(WeightedLossCallback(class_weights))
+        logger.info("Added weighted loss callback to training pipeline")
 
     # Initialize YOLO model
     logger.info(f"Initializing YOLO11m model: {config_dict['model']}")
@@ -195,7 +294,10 @@ def train_pest_detector(
             # Project
             project=config_dict['project'],
             name=config_dict['name'],
-            exist_ok=config_dict['exist_ok']
+            exist_ok=config_dict['exist_ok'],
+
+            # Callbacks for custom training logic (class weighting, memory management)
+            callbacks=callbacks
         )
 
         logger.info("\n" + "=" * 80)
