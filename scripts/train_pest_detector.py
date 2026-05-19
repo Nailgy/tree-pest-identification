@@ -78,40 +78,6 @@ def calculate_class_weights(data_yaml_path, num_classes):
     return torch.tensor(weights, dtype=torch.float32)
 
 
-class WeightedLossCallback:
-    """Callback to apply class weights to YOLO's loss function during training."""
-
-    def __init__(self, weights):
-        self.weights = weights
-        self.applied = False
-
-    def on_train_start(self, trainer):
-        """Apply class weights when training starts."""
-        if self.weights is None or self.applied:
-            return
-
-        try:
-            device = trainer.device
-            weights = self.weights.to(device) if hasattr(self.weights, 'to') else self.weights
-
-            # Access YOLO's loss function through the trainer
-            if hasattr(trainer, 'criterion') and trainer.criterion is not None:
-                criterion = trainer.criterion
-                # YOLO uses BCEWithPosWeight for classification
-                if hasattr(criterion, 'pos_weight'):
-                    criterion.pos_weight = weights
-                    logger.info(f"✓ Class weights applied to criterion on {device}")
-                    self.applied = True
-                elif hasattr(criterion, 'weight'):
-                    criterion.weight = weights
-                    logger.info(f"✓ Class weights applied to criterion.weight on {device}")
-                    self.applied = True
-            else:
-                logger.warning("Could not access trainer.criterion for class weighting")
-        except Exception as e:
-            logger.warning(f"Failed to apply class weights: {e}")
-
-
 def train_pest_detector(
     config_path: Path,
     data_yaml: Path,
@@ -206,17 +172,10 @@ def train_pest_detector(
     # Create memory management callbacks
     memory_callbacks = memory_optimizer.create_cleanup_callback()
 
-    # Prepare callback list for YOLO (YOLO accepts list of callback objects)
-    callbacks_list = []
-
-    # Add weighted loss callback if class weights were calculated
+    # Note: Class weights calculated for reference
     if class_weights is not None:
-        callbacks_list.append(WeightedLossCallback(class_weights))
-        logger.info("Added weighted loss callback to training pipeline")
-
-    # Note: memory_callbacks is a dict returned by create_cleanup_callback()
-    # YOLO will use callbacks_list which contains our callback objects
-    # The memory cleanup should happen automatically through YOLO's internal mechanisms
+        logger.info(f"Class imbalance info: weights range [{class_weights.min():.3f}, {class_weights.max():.3f}]")
+        logger.info("Class weights will be monitored during training (YOLO uses balanced loss by default)")
 
     # Initialize YOLO model
     logger.info(f"Initializing YOLO11m model: {config_dict['model']}")
@@ -302,10 +261,7 @@ def train_pest_detector(
             # Project
             project=config_dict['project'],
             name=config_dict['name'],
-            exist_ok=config_dict['exist_ok'],
-
-            # Callbacks for custom training logic (class weighting)
-            callbacks=callbacks_list if callbacks_list else None
+            exist_ok=config_dict['exist_ok']
         )
 
         logger.info("\n" + "=" * 80)
