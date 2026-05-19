@@ -26,17 +26,20 @@ weight_decay: 0.0005
 warmup_epochs: 3
 cos_lr: true
 
-# Augmentation (lighter)
-hsv_h: 0.015
-hsv_s: 0.7
-hsv_v: 0.4
-degrees: 15.0
-translate: 0.1
-scale: 0.5
-flipud: 0.2
-fliplr: 0.5
-mosaic: 1.0
-mixup: 0.1
+# Augmentation (AGGRESSIVE for imbalanced data - 102 classes, 11 minority)
+hsv_h: 0.15             # 10x stronger: color variation for distinguishing minority classes
+hsv_s: 0.8              # Saturation robustness
+hsv_v: 0.5              # Brightness robustness
+degrees: 45.0           # 3x stronger rotation
+translate: 0.2          # 2x stronger translation
+scale: 0.7              # Stronger zoom variation
+shear: 5.0              # Add shearing (new)
+perspective: 0.001      # Add perspective (new)
+flipud: 0.3             # Vertical flips for minority classes
+fliplr: 0.5             # Horizontal flips
+mosaic: 1.0             # Keep mosaic
+mixup: 0.3              # 3x stronger mixup - critical for imbalanced data
+copy_paste: 0.3         # Critical for small/rare objects
 
 # Validation
 val: true

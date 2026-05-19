@@ -90,16 +90,19 @@ def train_pest_detector(
         )
 
     # Load augmentation plan if provided
+    aug_engine = None
     if augmentation_plan and augmentation_plan.exists():
         logger.info(f"Loading augmentation plan: {augmentation_plan}")
         aug_engine = StorageEfficientAugmentation.load_plan(augmentation_plan)
         stats = aug_engine.get_statistics()
         logger.info(
             f"Augmentation: {stats['classes_to_augment']} minority classes, "
-            f"{stats['total_additional_samples']} additional samples"
+            f"{stats['total_additional_samples']} additional samples (on-the-fly)"
         )
     else:
-        logger.info("No augmentation plan provided - using YOLO built-in augmentation only")
+        if augmentation_plan:
+            logger.warning(f"Augmentation plan not found: {augmentation_plan}")
+        logger.info("Using config-based augmentation (no augmentation plan)")
 
     # Override output directory if provided
     if output_dir:
@@ -123,6 +126,15 @@ def train_pest_detector(
     logger.info(f"  - Optimizer: {config_dict['optimizer']}")
     logger.info(f"  - Learning rate: {config_dict['lr0']} → {config_dict['lrf']}")
     logger.info(f"  - Device: {config_dict['device']}")
+
+    # Log augmentation configuration
+    logger.info("\nAugmentation Configuration:")
+    logger.info(f"  - Color variation (HSV): H={config_dict.get('hsv_h', 0.015)}, S={config_dict.get('hsv_s', 0.7)}, V={config_dict.get('hsv_v', 0.4)}")
+    logger.info(f"  - Spatial transforms: Rotation={config_dict.get('degrees', 0)}°, Translate={config_dict.get('translate', 0.1)}, Scale={config_dict.get('scale', 0.5)}")
+    logger.info(f"  - Flips: UD={config_dict.get('flipud', 0)}, LR={config_dict.get('fliplr', 0.5)}")
+    logger.info(f"  - Advanced: Mosaic={config_dict.get('mosaic', 1.0)}, Mixup={config_dict.get('mixup', 0)}, CopyPaste={config_dict.get('copy_paste', 0)}")
+    if aug_engine:
+        logger.info(f"  - Augmentation Plan: {augmentation_plan}")
 
     # Pre-training cleanup
     logger.info("\nPreparing for training...")
