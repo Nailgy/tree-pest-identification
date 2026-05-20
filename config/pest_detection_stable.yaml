@@ -12,10 +12,10 @@ patience: 30               # Increased (imbalanced datasets learn slower)
 save_period: 10
 
 # Hardware optimization
-img_size: 640
-batch_size: 6              # Reduced for FP32 stability
+img_size: 512              # Optimized for 512x512 native dataset (40% faster)
+batch_size: 8              # Increased (less VRAM needed at 512x512)
 workers: 8
-accumulate: 4              # Increased (effective batch = 24, more stable)
+accumulate: 2              # Reduced (effective batch = 16, stable & faster)
 amp: false                 # CRITICAL: Disable FP16 to prevent NaN
 
 # Optimizer (CONSERVATIVE)
