@@ -1,8 +1,8 @@
 # YOLO11m Phase 2 Training - Resume from Epoch 10
 # Fixes: Less aggressive LR decay, light augmentation
 
-# Model (will be overridden by resume path)
-model: yolo11m.pt
+# Model - Resume from best epoch 10 checkpoint
+model: models/pest_detection_stable/train/weights/epoch10.pt
 task: detect
 
 # Training
