@@ -1,0 +1,59 @@
+# YOLO11m Phase 2 Training - Resume from Epoch 10
+# Fixes: Less aggressive LR decay, light augmentation
+
+# Model (will be overridden by resume path)
+model: yolo11m.pt
+task: detect
+
+# Training
+epochs: 100                # Train 90 more epochs (10 → 100)
+patience: 20               # Stop if no improvement for 20 epochs
+save_period: 5
+
+# Hardware optimization
+img_size: 512
+batch_size: 8
+workers: 8
+accumulate: 2
+amp: false
+
+# Optimizer (LESS AGGRESSIVE DECAY)
+optimizer: AdamW
+lr0: 0.0005               # Lower starting LR (was 0.001, now resume from smaller)
+lrf: 0.1                  # MUCH LESS aggressive (was 0.0001 → now 0.1)
+momentum: 0.937
+weight_decay: 0.0005
+warmup_epochs: 3          # Short warmup on resume
+warmup_momentum: 0.8
+warmup_bias_lr: 0.01
+cos_lr: true              # Keep cosine but with gentler decay
+
+# Augmentation (ADD LIGHT AUGMENTATION to reduce overfitting)
+hsv_h: 0.015              # Slight increase from 0.01
+hsv_s: 0.5                # Slight increase from 0.4
+hsv_v: 0.5                # Slight increase from 0.4
+degrees: 20.0             # Slight increase from 15.0
+translate: 0.15           # Increase from 0.1
+scale: 0.4                # Increase from 0.3
+shear: 0.0
+perspective: 0.0
+flipud: 0.0
+fliplr: 0.5
+mosaic: 0.2               # Add light mosaic (was 0.0)
+mixup: 0.0                # Keep disabled
+copy_paste: 0.0           # Keep disabled
+close_mosaic: 10
+
+# Validation
+val: true
+plots: true
+save_json: true
+save_hybrid: false
+
+# Device
+device: cuda:0
+
+# Project paths
+project: models/pest_detection_phase2
+name: train
+exist_ok: false
