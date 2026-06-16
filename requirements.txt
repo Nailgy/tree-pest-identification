@@ -1,39 +1,16 @@
-# IMPORTANT: Install PyTorch FIRST separately with CUDA support!
-# Run this BEFORE pip install -r requirements.txt:
-# pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
+# Stage 1 — Fruit-Tree Leaf Detector (YOLO11m)
+# Target: Python 3.11 (newer versions cause dependency/build issues with this stack)
 #
-# Then run: pip install -r requirements.txt
+# Install order matters — the CUDA torch wheel must come from PyTorch's index:
+#   1) py -3.11 -m venv venv  &&  venv\Scripts\activate   (Windows)
+#   2) pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu124
+#   3) pip install -r requirements.txt
+#
+# torch/torchvision are intentionally NOT pinned here: they ship from the cu124
+# index above, not PyPI, so listing them in this file would pull CPU-only wheels.
 
-# YOLO & Computer Vision
 ultralytics==8.3.40
-sahi==0.11.18
-opencv-python-headless==4.10.0.84
-albumentations==1.4.20
-
-# Data Handling
-roboflow==1.1.44
-pyyaml==6.0.2
-pandas==2.2.3
-numpy==1.26.4
-Pillow==11.0.0
-
-# Metrics & Visualization
-scikit-learn==1.6.0
-matplotlib==3.9.2
-seaborn==0.13.2
-plotly==5.24.1
-
-# Memory & Performance
-psutil==6.1.0
-py3nvml==0.2.7
-tqdm==4.67.1
-
-# Utilities
-python-dotenv==1.0.1
-loguru==0.7.3
-pydantic==2.10.3
-typer==0.15.1
-rich==13.9.4
-
-# Data Validation
-jsonschema==4.23.0
+albumentations==1.4.20      # enables Ultralytics' extra online augs (blur / CLAHE / grayscale)
+opencv-python==4.10.0.84
+PyYAML==6.0.2
+numpy==1.26.4               # keep <2 for torch 2.5.1 compatibility

@@ -1,264 +1,96 @@
-# Tree Pest Detection Pipeline
+# Tree Pest Identification — Stage 1: Leaf Detector (YOLO11m)
 
-Production-grade YOLO11m computer vision pipeline for detecting and classifying 103 pest species in precision agriculture. Optimized for RTX 4070 Laptop (8GB VRAM) with SAHI support for 4K inference.
+Detection and classification of fruit-tree pests, built in three stages:
 
-## Features
+1. **Stage 1 (this repo, current state):** train a YOLO11m detector for a single
+   `leaf` class on a fruit-tree subset of PlantDoc (apple, cherry, peach, grape).
+2. **Stage 2:** slice 4K orchard images with SAHI into 416×416 tiles and run the
+   Stage-1 detector on each tile.
+3. **Stage 3:** crop detected leaves and pass them to a second YOLO11m model
+   trained to detect pests / diseases.
 
-- **YOLO11m Detection**: State-of-the-art object detection for 103 pest classes
-- **Memory Optimized**: Dynamic batch sizing, gradient accumulation, mixed precision (AMP) for 8GB VRAM
-- **Storage Efficient**: On-the-fly augmentation (zero disk overhead) for minority classes
-- **4K Inference**: SAHI (Slicing Aided Hyper Inference) for high-resolution images without OOM
-- **Production Ready**: Enterprise-grade code with logging, monitoring, error handling
+> `old_project_version/` is kept only as a reference for the working dependency
+> versions and structure — it is **not** part of the current pipeline.
 
-## Project Structure
+## Dataset
 
-```
-tree-pest-identification/
-├── config/                    # Configuration files
-│   ├── pest_detection.yaml    # Training hyperparameters
-│   ├── augmentation.yaml      # Augmentation policies
-│   └── sahi.yaml              # SAHI inference config
-├── src/                       # Source code
-│   ├── core/                  # Core utilities
-│   ├── data/                  # Data pipeline
-│   ├── training/              # Training orchestration
-│   ├── inference/             # SAHI inference
-│   └── evaluation/            # Metrics extraction
-├── scripts/                   # Executable scripts
-│   ├── download_dataset.py    # Download from Roboflow
-│   ├── analyze_dataset.py     # Class distribution analysis
-│   ├── prepare_augmentation.py # Augmentation planning
-│   ├── train_pest_detector.py  # Training
-│   ├── evaluate_model.py      # Model evaluation
-│   └── run_inference.py       # SAHI inference
-└── plan.md                    # Detailed implementation plan
+`dataset/` is a PlantDoc export, subsetted to fruit-tree leaves and remapped to a
+single class via `main.py`:
 
-```
+| Split | Images |
+|-------|--------|
+| train | 432    |
+| valid | 71     |
+| test  | 68     |
 
-## Quick Start
+All images are 416×416; every label uses class `0` (`leaf`). Paths are defined in
+[`dataset/data.yaml`](dataset/data.yaml).
 
-### 1. Environment Setup
+## Hardware target (training PC)
+
+Intel Core i9-13900HX · 32 GB RAM · RTX 4070 8 GB · ~130 GB free SSD.
+
+## Setup (Python 3.11)
+
+Python **3.11** is required — newer versions break this dependency stack.
 
 ```bash
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+# Windows
+py -3.11 -m venv venv
+venv\Scripts\activate
 
-# Install PyTorch with CUDA 12.x support (IMPORTANT - do this first!)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+# 1) CUDA build of torch (from PyTorch's index, NOT PyPI)
+pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu124
 
-# Install remaining dependencies
+# 2) the rest
 pip install -r requirements.txt
-
-# Verify GPU
-python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}')"
 ```
 
-**If you get "Could not find version" error**, see `PYTORCH_INSTALL.md` for detailed troubleshooting.
-
-### 2. Download Dataset
+Verify the GPU is visible:
 
 ```bash
-# Download pest images from Roboflow
-python scripts/download_dataset.py \
-    --url "https://app.roboflow.com/ds/EGdwov1ZOb?key=CTBOjtBxlx" \
-    --output data/raw/pests
+python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+# -> True NVIDIA GeForce RTX 4070 ...
 ```
 
-### 3. Analyze Dataset
+## Train
 
 ```bash
-# Analyze class distribution
-python scripts/analyze_dataset.py \
-    --dataset data/raw/pests \
-    --output outputs/metrics/class_distribution.json
+python scripts/train_leaf_detector.py
+# or a different config:
+python scripts/train_leaf_detector.py --config configs/leaf_detection.yaml
 ```
 
-### 4. Prepare Augmentation
+Hyperparameters live in [`configs/leaf_detection.yaml`](configs/leaf_detection.yaml)
+(imgsz 416, batch 16, AMP, AdamW + cosine LR, built-in online augmentation). The
+pretrained `yolo11m.pt` weights auto-download on the first run.
+
+Outputs land in `runs/train/leaf_yolo11m/`:
+- `weights/best.pt`, `weights/last.pt`
+- `results.png` (loss / metric curves), `confusion_matrix.png`, val-batch previews.
+
+**Smoke test first:** temporarily set `epochs: 2` to confirm the data loads
+(432 train / 71 val), the GPU is used, and `batch: 16` fits in VRAM (watch
+`nvidia-smi`). If you hit OOM, lower `batch` to 12 or 8.
+
+## Evaluate
 
 ```bash
-# Create augmentation plan for minority classes
-python scripts/prepare_augmentation.py \
-    --dataset data/raw/pests \
-    --distribution outputs/metrics/class_distribution.json \
-    --output data/processed/augmentation_plan.json
+python scripts/evaluate_leaf_detector.py
+# custom weights / split:
+python scripts/evaluate_leaf_detector.py --weights runs/train/leaf_yolo11m/weights/best.pt --split test
 ```
 
-### 5. Train Model
+Prints precision, recall, mAP@50 and mAP@50-95 on the held-out test split — use
+these as the readiness gate before Stage 2.
 
-```bash
-# Train YOLO11m (8-12 hours on RTX 4070)
-python scripts/train_pest_detector.py \
-    --config config/pest_detection.yaml \
-    --data data/raw/pests/data.yaml \
-    --augmentation data/processed/augmentation_plan.json
+## Layout
+
 ```
-
-**Training Configuration (Optimized for 8GB VRAM + 103 classes):**
-- Image size: 640×640
-- Batch size: 8 (effective batch: 16 with gradient accumulation)
-- Mixed precision (AMP): Enabled (~40% VRAM reduction)
-- Epochs: 150 with early stopping (patience=20)
-
-### 6. Evaluate Model
-
-```bash
-# Extract metrics (mAP, precision, recall, F1)
-python scripts/evaluate_model.py \
-    --model models/pest_detection/train/weights/best.pt \
-    --data data/raw/pests/data.yaml \
-    --output outputs/metrics/evaluation_results.json
+configs/leaf_detection.yaml      training hyperparameters
+scripts/train_leaf_detector.py   load config -> YOLO.train()
+scripts/evaluate_leaf_detector.py YOLO.val() on the test split
+dataset/                         PlantDoc fruit-tree subset (single `leaf` class)
+main.py                          one-off: subset + remap PlantDoc labels to class 0
+requirements.txt                 lean deps (torch installed separately)
 ```
-
-### 7. Run Inference on 4K Images
-
-```bash
-# SAHI inference on high-resolution images
-python scripts/run_inference.py \
-    --model models/pest_detection/train/weights/best.pt \
-    --input path/to/4k_images/ \
-    --output outputs/predictions/
-```
-
-**SAHI Configuration:**
-- Slice size: 640×640 (matches training)
-- Overlap: 20% (prevents missing objects at boundaries)
-- Expected performance: ~2.7s per 4K image
-- VRAM usage: ~2.5GB (safe for 8GB GPU)
-
-## Hardware Requirements
-
-- **GPU**: NVIDIA RTX 4070 Laptop (8GB VRAM) or equivalent
-- **RAM**: 32GB
-- **Storage**: 130GB free space
-- **CUDA**: 12.x
-
-## Key Optimizations
-
-### Memory Management (8GB VRAM)
-- **Mixed Precision (AMP)**: 40% VRAM reduction with minimal accuracy impact
-- **Dynamic Batch Sizing**: Automatically adjusts based on VRAM availability
-- **Gradient Accumulation**: Simulates larger batches (batch=8, accumulate=2 → effective=16)
-- **Aggressive Cleanup**: CUDA cache cleared after validation epochs
-
-### Storage Efficiency (130GB Constraint)
-- **On-the-Fly Augmentation**: All augmentation happens in-memory during training
-- **Minority Class Focus**: Only augment underrepresented classes (< 10th percentile)
-- **Zero Disk Overhead**: No duplicate images saved to disk
-
-### SAHI for 4K Inference
-- **Slicing**: 4K image (3840×2160) → 54 slices (640×640 each)
-- **Overlap**: 20% to catch objects at slice boundaries
-- **NMS Post-Processing**: Removes duplicate detections
-- **Performance**: ~50ms per slice, ~2.7s total per 4K image
-
-## Expected Results
-
-Based on 103 classes, 75k images:
-
-| Metric | Expected Range | Good Threshold |
-|--------|---------------|----------------|
-| mAP@50 | 0.75 - 0.90 | > 0.80 |
-| mAP@50-95 | 0.55 - 0.75 | > 0.65 |
-| Precision | 0.80 - 0.95 | > 0.85 |
-| Recall | 0.70 - 0.90 | > 0.80 |
-| F1 Score | 0.75 - 0.90 | > 0.82 |
-
-**Training Time**: 8-12 hours (150 epochs)  
-**Inference**: 2.5-3.5s per 4K image
-
-## Troubleshooting
-
-### CUDA Out of Memory
-
-**Symptoms**: `RuntimeError: CUDA out of memory`
-
-**Solutions**:
-1. Reduce `batch_size` from 8 to 4 in `config/pest_detection.yaml`
-2. Increase `accumulate` from 2 to 4
-3. Reduce `img_size` from 640 to 512
-4. Ensure `amp: true` is enabled
-
-```yaml
-# config/pest_detection.yaml
-batch_size: 4    # Reduced
-accumulate: 4    # Increased
-```
-
-### Storage Exceeded
-
-**Symptoms**: Disk full during training
-
-**Solutions**:
-1. Verify augmentation plan uses on-the-fly mode (check `augmentation_plan.json`)
-2. Delete old training runs: `rm -rf models/pest_detection/train*`
-3. Keep only `best.pt`, delete `last.pt`
-
-### Slow Training
-
-**Symptoms**: > 15 hours for 150 epochs
-
-**Solutions**:
-1. Increase `workers` from 8 to 12
-2. Reduce `patience` from 20 to 15
-3. Use `close_mosaic: 10` in config
-
-## Git Workflow (Development + Training on Separate Machines)
-
-```bash
-# Machine A (Development)
-git add src/ scripts/ config/
-git commit -m "feat: implement pest detection pipeline"
-git push origin main
-
-# Machine B (Training)
-git clone <repository>
-git pull origin main
-pip install -r requirements.txt
-python scripts/download_dataset.py --url <roboflow-url>
-python scripts/train_pest_detector.py --config config/pest_detection.yaml --data data/raw/pests/data.yaml
-
-# Commit trained model (via Git LFS)
-git add models/pest_detection/train/weights/best.pt
-git commit -m "chore: add trained model (mAP@50: 0.87)"
-git push origin main
-```
-
-## File Paths Reference
-
-- **Dataset**: `data/raw/pests/` (gitignored)
-- **Config**: `config/pest_detection.yaml`
-- **Augmentation Plan**: `data/processed/augmentation_plan.json`
-- **Trained Models**: `models/pest_detection/train/weights/best.pt` (Git LFS)
-- **Metrics**: `outputs/metrics/`
-- **Predictions**: `outputs/predictions/`
-
-## Next Steps
-
-1. **Train model** on Machine B (8-12 hours)
-2. **Evaluate** with `evaluate_model.py` (extract confusion matrix, PR curves, F1 scores)
-3. **Run inference** on 4K test images with SAHI
-4. **Analyze results** - identify minority classes needing more data
-5. **Iterate** - adjust augmentation or hyperparameters if mAP < 0.70
-
-## Documentation
-
-- **Detailed Plan**: See `plan.md` for complete implementation strategy
-- **Training Guide**: See `docs/training_guide.md` (to be created)
-- **SAHI Guide**: See `docs/inference_guide.md` (to be created)
-
-## License
-
-MIT License - See LICENSE file
-
-## Acknowledgments
-
-- **YOLO11**: Ultralytics YOLO11m
-- **SAHI**: Slicing Aided Hyper Inference by Obss
-- **Dataset**: Roboflow pest detection dataset
-
----
-
-**Contact**: Illia - Master's in Software Engineering  
-**Project**: Precision Agriculture Pest Detection  
-**Hardware**: RTX 4070 Laptop (8GB VRAM), 32GB RAM

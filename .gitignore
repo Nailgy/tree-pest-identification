@@ -1,55 +1,13 @@
-# Data (too large for Git)
-data/raw/
-data/processed/
-data/cache/
-
-# Model runs (LFS for best.pt only)
-models/*/runs/
-models/*/weights/last.pt
-
-# Outputs
-outputs/
-*.log
+# Reference / data (large, not tracked)
+old_project_version/
+dataset/
 
 # Python
+venv/
+.venv/
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-ENV/
-env/
-*.egg-info/
-dist/
-build/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*.swn
-
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb
-
-# Temporary files
-*.tmp
-*.temp
-.cache/
-
-# PyTorch
-*.pth
-*.ckpt
-lightning_logs/
-
-# TensorBoard
+# Training artifacts & model weights
 runs/
-tensorboard/
+*.pt
