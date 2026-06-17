@@ -1,0 +1,26 @@
+# Stage 2 — SAHI sliced leaf-detection inference on high-res (4K) images.
+# Consumed by scripts/detect_leaves_sahi.py. Slice size matches the Stage-1
+# training imgsz (416) so leaves are seen by the detector at the scale it learned.
+
+# --- Model ---------------------------------------------------------------
+weights: runs/train/leaf_yolo11m/weights/best.pt   # Stage-1 detector (resolved from repo root)
+device: cuda:0
+confidence_threshold: 0.25      # leaves are only a SPATIAL GATE for Stage 3 — lean toward
+                                #   recall (~0.2) so few real leaves are missed; Stage 3 filters
+iou_threshold: 0.45
+
+# --- Slicing (match Stage-1 training imgsz = 416) ------------------------
+slice_height: 416
+slice_width: 416
+overlap_height_ratio: 0.2       # 20% overlap so leaves on tile borders aren't cut in half
+overlap_width_ratio: 0.2
+perform_standard_pred: true     # also run one full-image pass to catch leaves bigger than a tile
+
+# --- Merge of overlapping tile detections --------------------------------
+postprocess_type: GREEDYNMM     # SAHI default; merges duplicated sliced detections better than plain NMS
+postprocess_match_metric: IOS   # Intersection-over-Smaller — robust when one box is a partial slice
+postprocess_match_threshold: 0.5
+postprocess_class_agnostic: false
+
+# --- Crop handoff to Stage 3 ---------------------------------------------
+crop_padding: 0.05              # pad each leaf bbox by 5% of its size before cropping (context for pest model)

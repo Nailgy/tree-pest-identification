@@ -10,7 +10,10 @@
 # index above, not PyPI, so listing them in this file would pull CPU-only wheels.
 
 ultralytics==8.3.40
+sahi==0.11.18               # Stage 2 — sliced inference on 4K images (wraps the YOLO model)
 albumentations==1.4.20      # enables Ultralytics' extra online augs (blur / CLAHE / grayscale)
-opencv-python==4.10.0.84
+opencv-python==4.9.0.80     # top of the overlap: ultralytics needs >=4.6.0, sahi needs <=4.9.0.80
 PyYAML==6.0.2
-numpy==1.26.4               # keep <2 for torch 2.5.1 compatibility
+numpy==1.26.4               # keep <2 for the torch 2.5.1 stack
+pandas==2.2.3               # pin to tested version — pandas 3.x conflicts with numpy<2
+matplotlib==3.9.2           # pin to tested version (ultralytics plotting); avoids latest-version drift

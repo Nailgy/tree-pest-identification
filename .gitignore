@@ -11,3 +11,7 @@ __pycache__/
 # Training artifacts & model weights
 runs/
 *.pt
+
+# Local test inputs (your own 4K images / dropped-in models)
+test_images/
+models/
