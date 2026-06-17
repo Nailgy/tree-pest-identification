@@ -1,0 +1,51 @@
+# Stage 3 — YOLO11m pest-detection training hyperparameters (18 IP02 classes).
+# Loaded by scripts/train_detector.py and passed straight into Ultralytics
+# model.train(). Tuned for ~5124 training images on an RTX 4070 8 GB.
+#
+# Note: this IP02 subset has full-frame boxes (1 pest per image), so training
+# is effectively fine-grained classification — aggregate mAP will look high
+# because localization is trivial. Judge quality by the PER-CLASS table from
+# scripts/evaluate_detector.py, especially recall on the rare classes.
+
+# --- Model / data --------------------------------------------------------
+model: yolo11m.pt                       # pretrained COCO weights (transfer learning)
+data: YOLO_Fruit_Pests_dataset/data.yaml  # resolved relative to repo root by the train script
+
+# --- Schedule ------------------------------------------------------------
+epochs: 200
+patience: 50               # 18 fine-grained classes converge slowly — give them room
+close_mosaic: 10
+
+# --- Hardware / throughput ----------------------------------------------
+imgsz: 640                 # IP02 images are small/variable (~200-400 px), so this upscales;
+                           #   imgsz: 512 is a faster near-equivalent with little quality loss.
+batch: 16                  # NEAR the 8 GB ceiling at 640 -> if CUDA OOM, drop to 8
+                           #   (or set batch: 0.70 for Ultralytics auto-sizing to ~70% VRAM).
+device: 0
+workers: 8
+amp: true                  # mixed precision — saves ~40% VRAM
+cache: false               # the dataset is only ~320 MB; `cache: ram` speeds epochs if you have headroom
+
+# --- Optimizer -----------------------------------------------------------
+optimizer: AdamW
+lr0: 0.001
+lrf: 0.01
+cos_lr: true
+warmup_epochs: 3
+
+# --- Online augmentation (built-in; user opted out of offline balancing) -
+hsv_h: 0.015
+hsv_s: 0.7
+hsv_v: 0.4                  # colour cues matter for pest species — keep HSV active
+degrees: 15.0
+translate: 0.1
+scale: 0.5
+fliplr: 0.5
+flipud: 0.5                # pests have no canonical orientation
+mosaic: 1.0
+mixup: 0.1
+copy_paste: 0.0
+
+# --- Output --------------------------------------------------------------
+project: runs/train
+name: pest_yolo11m

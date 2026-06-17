@@ -1,6 +1,7 @@
 # Reference / data (large, not tracked)
 old_project_version/
 dataset/
+YOLO_Fruit_Pests_dataset/
 
 # Python
 venv/
@@ -15,3 +16,4 @@ runs/
 # Local test inputs (your own 4K images / dropped-in models)
 test_images/
 models/
+YOLO_Fruit_Pests_dataset/

@@ -1,13 +1,13 @@
-"""Stage 1 — train a YOLO11m detector for the single `leaf` class.
+"""Generic YOLO11m detector trainer (config-driven, stage-agnostic).
 
 Lean wrapper around Ultralytics: load hyperparameters from a YAML config and
 hand them straight to ``model.train()``. Ultralytics handles AMP, device
 placement, the DataLoader and logging natively, so there is no custom
 device/memory code here.
 
-Usage:
-    python scripts/train_leaf_detector.py
-    python scripts/train_leaf_detector.py --config configs/leaf_detection.yaml
+The config selects the dataset/model, so the same script trains every stage:
+    Stage 1 (leaf, default):  python scripts/train_detector.py
+    Stage 3 (pests):          python scripts/train_detector.py --config configs/pest_detection.yaml
 """
 
 from __future__ import annotations
