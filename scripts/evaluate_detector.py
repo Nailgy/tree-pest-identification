@@ -39,11 +39,20 @@ def main() -> None:
     if not args.weights.is_file():
         raise FileNotFoundError(f"Weights not found: {args.weights}")
 
+    # Resolve data.yaml to an ABSOLUTE path (like train_detector.py does). With a
+    # relative yaml path, Ultralytics resolves train/val/test against its global
+    # `datasets_dir` setting — which silently points at the wrong place. An absolute
+    # yaml path anchors resolution to the yaml's own folder.
+    data_path = args.data if args.data.is_absolute() else (REPO_ROOT / args.data)
+    data_path = data_path.resolve()
+    if not data_path.is_file():
+        raise FileNotFoundError(f"data.yaml not found: {data_path}")
+
     print(f"[eval] Weights: {args.weights}")
-    print(f"[eval] Data:    {args.data}  (split={args.split}, imgsz={args.imgsz})")
+    print(f"[eval] Data:    {data_path}  (split={args.split}, imgsz={args.imgsz})")
 
     model = YOLO(str(args.weights))
-    results = model.val(data=str(args.data), split=args.split, imgsz=args.imgsz)
+    results = model.val(data=str(data_path), split=args.split, imgsz=args.imgsz)
 
     box = results.box
     print("\n[eval] Aggregate")
