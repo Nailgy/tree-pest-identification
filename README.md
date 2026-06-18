@@ -141,23 +141,36 @@ differs.
 > **per-class table** (below), especially recall on the rare classes
 > (black_scale, clearwing_moth_glass, brown_aphid).
 
+**Optional — balance the classes first.** The split is 19:1 imbalanced. This
+augments minority classes (TRAIN only) up to a target count so the model isn't
+swamped by the big classes:
+
+```bash
+python scripts/balance_pest_classes.py                 # target = median class count
+python scripts/balance_pest_classes.py --target 300    # lift the small classes higher
+```
+
+It adds `aug_*` images into `YOLO_Fruit_Pests_dataset/train/`, leaves valid/test
+untouched, and is re-runnable (regenerates `aug_*` each time). No `data.yaml`
+change needed — training just sees more train images.
+
 ```bash
 python scripts/train_detector.py --config configs/pest_detection.yaml
 ```
 
 Parameters: [`configs/pest_detection.yaml`](configs/pest_detection.yaml) — imgsz
-640, batch 16 (drop to 8 if OOM), 200 epochs, patience 50, built-in online
-augmentation. Outputs land in `runs/train/pest_yolo11m/`.
+416, batch 16 (drop to 8 to cut VRAM further), 200 epochs, patience 50, built-in
+online augmentation. Outputs land in `runs/train/pest_yolo11m/`.
 
-**Smoke test first** (set `epochs: 2`): confirm 5124 train / 851 val load and
-`batch: 16 @ 640` fits VRAM. Each epoch is ~5–8× a Stage-1 epoch (5124 vs 432
-images). Revert to `epochs: 200` and delete the smoke run before the full run.
+**Smoke test first** (set `epochs: 2`): confirm the train/val images load and
+`batch: 16 @ 416` fits VRAM (~5 GB, no overflow into shared memory). Each epoch
+is ~5–8× a Stage-1 epoch. Revert to `epochs: 200` and delete the smoke run first.
 
 ### Evaluate (per-class)
 
 ```bash
 python scripts/evaluate_detector.py --weights runs/train/pest_yolo11m/weights/best.pt \
-    --data YOLO_Fruit_Pests_dataset/data.yaml --split test --imgsz 640
+    --data YOLO_Fruit_Pests_dataset/data.yaml --split test --imgsz 416
 ```
 
 Prints the aggregate metrics plus a **per-class table sorted by weakest recall**,
@@ -172,6 +185,7 @@ configs/sahi_inference.yaml      Stage-2 SAHI inference parameters
 scripts/train_detector.py        generic config-driven trainer (Stages 1 & 3)
 scripts/evaluate_detector.py     generic YOLO.val() + per-class metrics table
 scripts/detect_leaves_sahi.py    Stage-2: SAHI sliced leaf detection -> crops + manifests
+scripts/balance_pest_classes.py  Stage-3: offline minority-class augmentation (train split)
 dataset/                         Stage-1: PlantDoc fruit-tree subset (single `leaf` class)
 YOLO_Fruit_Pests_dataset/        Stage-3: IP02 fruit-pest subset (18 classes)
 main.py                          one-off: subset + remap PlantDoc labels to class 0

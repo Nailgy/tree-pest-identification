@@ -17,10 +17,10 @@ patience: 50               # 18 fine-grained classes converge slowly — give th
 close_mosaic: 10
 
 # --- Hardware / throughput ----------------------------------------------
-imgsz: 640                 # IP02 images are small/variable (~200-400 px), so this upscales;
-                           #   imgsz: 512 is a faster near-equivalent with little quality loss.
-batch: 16                  # NEAR the 8 GB ceiling at 640 -> if CUDA OOM, drop to 8
-                           #   (or set batch: 0.70 for Ultralytics auto-sizing to ~70% VRAM).
+imgsz: 416                 # IP02 images are only ~200-400 px native, so 640 just upscaled and
+                           #   overflowed 8 GB VRAM into shared memory. 416 captures all real
+                           #   detail and fits comfortably (~5 GB) at batch 16 on the RTX 4070.
+batch: 16                  # fits at 416 + AMP. To cut VRAM further, drop to 8 (~3.5 GB).
 device: 0
 workers: 8
 amp: true                  # mixed precision — saves ~40% VRAM
