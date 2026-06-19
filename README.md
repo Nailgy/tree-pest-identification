@@ -236,7 +236,7 @@ Outputs under `runs/pipeline/`:
 | 4 | YOLO11m to extract leaves | Stage 1 — `train_detector.py` + `configs/leaf_detection.yaml` |
 | 5 | Process 4K images by slicing | `scripts/detect_leaves_sahi.py` (SAHI) |
 | 6 | Second YOLO11m for pests on leaves | Stage 3 + the full pipeline `scripts/detect_pests_pipeline.py` |
-| 7 | Report (metrics, confusion matrix, …) | *deferred* — plots already emitted under each run dir |
+| 7 | Report (metrics, confusion matrix, F1, …) | [`REPORT.md`](REPORT.md) |
 
 ## Layout
 
@@ -255,4 +255,5 @@ dataset/                         Stage-1: PlantDoc fruit-tree subset (single `le
 YOLO_Fruit_Pests_dataset/        Stage-3: IP02 fruit-pest subset (18 classes)
 main.py                          one-off: subset + remap PlantDoc labels to class 0
 requirements.txt                 lean deps (torch installed separately)
+REPORT.md                        full project report (datasets, metrics, F1, architecture)
 ```
