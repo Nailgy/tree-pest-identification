@@ -194,10 +194,18 @@ models/pest_yolo11m6/weights/best.pt  <- Stage-3 pest detector  (pest_weights)
 **Run:**
 
 ```bash
-python scripts/detect_pests_pipeline.py --source path/to/4k_image_or_folder
+# single image
+python scripts/detect_pests_pipeline.py --source orchard.jpg
+# whole folder — every image is processed one by one
+python scripts/detect_pests_pipeline.py --source path/to/images_folder
 # CPU machine / tune sensitivity:
-python scripts/detect_pests_pipeline.py --source orchard.jpg --device cpu --pest-conf 0.4
+python scripts/detect_pests_pipeline.py --source images_folder --device cpu --pest-conf 0.4
 ```
+
+Point `--source` at a folder and it annotates **every** image in it one by one,
+printing `[i/N] <name>` progress and writing a separate annotated image + coord
+file per input. A failure on one image is logged to `summary.json` and skipped,
+so a bad file never aborts the batch.
 
 Outputs under `runs/pipeline/`:
 - `annotated/<stem>.jpg` — the 4K image with pest boxes + `species conf` labels

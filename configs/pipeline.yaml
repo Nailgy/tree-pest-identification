@@ -20,6 +20,6 @@ crop_padding: 0.05              # pad each leaf box by 5% before cropping (conte
 
 # --- Stage 3: pest detection on each leaf crop ----------------------------------
 pest_imgsz: 416
-pest_conf: 0.35                 # min confidence to call a leaf "infested"; below this the leaf is
+pest_conf: 0.6                 # min confidence to call a leaf "infested"; below this the leaf is
                                 #   treated as having no confident pest (the model has no 'healthy'
                                 #   class, so this threshold is what keeps clean leaves unlabelled)

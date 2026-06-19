@@ -84,6 +84,72 @@ def draw(img, x1, y1, x2, y2, label, color) -> None:
     cv2.putText(img, label, (x1 + 2, max(12, y1 - 5)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
 
+def process_image(img_path, leaf_model, pest_model, cfg, device, pest_conf, out_annot, out_pred) -> dict:
+    """Run the full chain on one image and write annotated/json/txt. Returns its summary record."""
+    image = cv2.imread(str(img_path))
+    if image is None:
+        raise ValueError("could not read image")
+    h, w = image.shape[:2]
+
+    # --- Stage 1: locate leaves on the full-res image via sliced inference ---
+    leaf_result = get_sliced_prediction(
+        str(img_path), leaf_model,
+        slice_height=cfg["slice_height"], slice_width=cfg["slice_width"],
+        overlap_height_ratio=cfg["overlap_height_ratio"],
+        overlap_width_ratio=cfg["overlap_width_ratio"],
+        perform_standard_pred=cfg["perform_standard_pred"],
+        postprocess_type=cfg["postprocess_type"],
+        postprocess_match_metric=cfg["postprocess_match_metric"],
+        postprocess_match_threshold=cfg["postprocess_match_threshold"],
+        verbose=0,
+    )
+
+    annotated = image.copy()
+    pests = []
+    leaves = leaf_result.object_prediction_list
+
+    # --- Stage 3: classify the pest on each leaf crop, reproject onto the 4K image ---
+    for obj in leaves:
+        lx1, ly1 = int(obj.bbox.minx), int(obj.bbox.miny)
+        lx2, ly2 = int(obj.bbox.maxx), int(obj.bbox.maxy)
+        cx1, cy1, cx2, cy2 = pad_clamp(lx1, ly1, lx2, ly2, cfg["crop_padding"], w, h)
+        crop = image[cy1:cy2, cx1:cx2]
+        if crop.size == 0:
+            continue
+
+        res = pest_model.predict(crop, imgsz=cfg["pest_imgsz"], conf=pest_conf,
+                                 device=device, verbose=False)[0]
+        if res.boxes is None or len(res.boxes) == 0:
+            continue  # no confident pest -> leaf treated as clean
+
+        confs = res.boxes.conf.cpu().numpy()
+        k = int(confs.argmax())                       # one pest per leaf -> take the top detection
+        conf = float(confs[k])
+        cls_id = int(res.boxes.cls[k].item())
+        species = pest_model.names[cls_id]
+        bx1, by1, bx2, by2 = res.boxes.xyxy[k].cpu().numpy().tolist()
+        # reproject crop-space pest box -> full-image coords (add the crop origin)
+        X1, Y1, X2, Y2 = int(bx1 + cx1), int(by1 + cy1), int(bx2 + cx1), int(by2 + cy1)
+
+        draw(annotated, X1, Y1, X2, Y2, f"{species} {conf:.2f}", color_for(cls_id))
+        pests.append({
+            "species": species, "class_id": cls_id, "confidence": round(conf, 4),
+            "bbox_xyxy": [X1, Y1, X2, Y2],
+            "leaf_bbox_xyxy": [lx1, ly1, lx2, ly2],
+        })
+
+    stem = img_path.stem
+    cv2.imwrite(str(out_annot / f"{stem}.jpg"), annotated)
+    with (out_pred / f"{stem}.json").open("w", encoding="utf-8") as fh:
+        json.dump({"image": img_path.name, "image_size_wh": [w, h],
+                   "num_leaves": len(leaves), "num_pests": len(pests), "pests": pests}, fh, indent=2)
+    with (out_pred / f"{stem}.txt").open("w", encoding="utf-8") as fh:
+        for p in pests:
+            x1, y1, x2, y2 = p["bbox_xyxy"]
+            fh.write(f"{p['species']} {p['confidence']:.4f} {x1} {y1} {x2} {y2}\n")
+    return {"image": img_path.name, "num_leaves": len(leaves), "num_pests": len(pests)}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="End-to-end pest detection on 4K images.")
     parser.add_argument("--source", type=Path, required=True, help="4K image file or a folder of images.")
@@ -116,78 +182,29 @@ def main() -> None:
     )
     pest_model = YOLO(cfg["pest_weights"])
 
+    # Process every image one by one. A failure on one image is logged and skipped
+    # so a single bad file never aborts a whole-folder batch.
     summary = []
-    for img_path in images:
-        image = cv2.imread(str(img_path))
-        if image is None:
-            print(f"  ! skip unreadable: {img_path.name}")
-            continue
-        h, w = image.shape[:2]
+    total = len(images)
+    for idx, img_path in enumerate(images, 1):
+        print(f"[{idx}/{total}] {img_path.name}")
+        try:
+            rec = process_image(img_path, leaf_model, pest_model, cfg, device, pest_conf, out_annot, out_pred)
+            print(f"    -> {rec['num_leaves']} leaves, {rec['num_pests']} pests")
+        except Exception as exc:  # noqa: BLE001 — keep the batch alive
+            print(f"    ! failed: {exc}")
+            rec = {"image": img_path.name, "error": str(exc)}
+        summary.append(rec)
 
-        # --- Stage 1: locate leaves on the full-res image via sliced inference ---
-        leaf_result = get_sliced_prediction(
-            str(img_path), leaf_model,
-            slice_height=cfg["slice_height"], slice_width=cfg["slice_width"],
-            overlap_height_ratio=cfg["overlap_height_ratio"],
-            overlap_width_ratio=cfg["overlap_width_ratio"],
-            perform_standard_pred=cfg["perform_standard_pred"],
-            postprocess_type=cfg["postprocess_type"],
-            postprocess_match_metric=cfg["postprocess_match_metric"],
-            postprocess_match_threshold=cfg["postprocess_match_threshold"],
-            verbose=0,
-        )
-
-        annotated = image.copy()
-        pests = []
-        leaves = leaf_result.object_prediction_list
-
-        # --- Stage 3: classify the pest on each leaf crop, reproject onto the 4K image ---
-        for obj in leaves:
-            lx1, ly1 = int(obj.bbox.minx), int(obj.bbox.miny)
-            lx2, ly2 = int(obj.bbox.maxx), int(obj.bbox.maxy)
-            cx1, cy1, cx2, cy2 = pad_clamp(lx1, ly1, lx2, ly2, cfg["crop_padding"], w, h)
-            crop = image[cy1:cy2, cx1:cx2]
-            if crop.size == 0:
-                continue
-
-            res = pest_model.predict(crop, imgsz=cfg["pest_imgsz"], conf=pest_conf,
-                                     device=device, verbose=False)[0]
-            if res.boxes is None or len(res.boxes) == 0:
-                continue  # no confident pest -> leaf treated as clean
-
-            confs = res.boxes.conf.cpu().numpy()
-            k = int(confs.argmax())                       # one pest per leaf -> take the top detection
-            conf = float(confs[k])
-            cls_id = int(res.boxes.cls[k].item())
-            species = pest_model.names[cls_id]
-            bx1, by1, bx2, by2 = res.boxes.xyxy[k].cpu().numpy().tolist()
-            # reproject crop-space pest box -> full-image coords (add the crop origin)
-            X1, Y1, X2, Y2 = int(bx1 + cx1), int(by1 + cy1), int(bx2 + cx1), int(by2 + cy1)
-
-            draw(annotated, X1, Y1, X2, Y2, f"{species} {conf:.2f}", color_for(cls_id))
-            pests.append({
-                "species": species, "class_id": cls_id, "confidence": round(conf, 4),
-                "bbox_xyxy": [X1, Y1, X2, Y2],
-                "leaf_bbox_xyxy": [lx1, ly1, lx2, ly2],
-            })
-
-        stem = img_path.stem
-        cv2.imwrite(str(out_annot / f"{stem}.jpg"), annotated)
-        with (out_pred / f"{stem}.json").open("w", encoding="utf-8") as fh:
-            json.dump({"image": img_path.name, "image_size_wh": [w, h],
-                       "num_leaves": len(leaves), "num_pests": len(pests), "pests": pests}, fh, indent=2)
-        with (out_pred / f"{stem}.txt").open("w", encoding="utf-8") as fh:
-            for p in pests:
-                x1, y1, x2, y2 = p["bbox_xyxy"]
-                fh.write(f"{p['species']} {p['confidence']:.4f} {x1} {y1} {x2} {y2}\n")
-
-        print(f"  {img_path.name}: {len(leaves)} leaves -> {len(pests)} pests")
-        summary.append({"image": img_path.name, "num_leaves": len(leaves), "num_pests": len(pests)})
-
+    failed = [r for r in summary if "error" in r]
     with (args.output / "summary.json").open("w", encoding="utf-8") as fh:
         json.dump(summary, fh, indent=2)
-    print(f"\n[pipeline] Done. Annotated 4K images -> {out_annot}")
-    print(f"[pipeline] Pest coordinates           -> {out_pred}")
+
+    done = total - len(failed)
+    print(f"\n[pipeline] Done: {done}/{total} image(s) processed"
+          + (f", {len(failed)} failed (see summary.json)" if failed else ""))
+    print(f"[pipeline] Annotated -> {out_annot}")
+    print(f"[pipeline] Coords    -> {out_pred}")
 
 
 if __name__ == "__main__":
