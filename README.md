@@ -9,9 +9,9 @@ Detection and classification of fruit-tree pests, built in three stages:
 3. **Stage 3 — pest detector:** a second YOLO11m model over 18 fruit-pest classes
    (IP02 subset), run on the leaf crops from Stage 2.
 
-> Training runs on the GPU PC; the leaf and pest models are trained independently.
-> Wiring Stage 3 onto Stage-2 crops (reprojecting boxes onto the 4K image) is a
-> later integration step.
+> Training runs on the GPU PC; the leaf and pest models are trained independently,
+> then **chained end-to-end** by `scripts/detect_pests_pipeline.py` — see
+> [Run the full pipeline](#run-the-full-pipeline-4k-image--pests) for the one-command app.
 
 > `old_project_version/` is kept only as a reference for the working dependency
 > versions and structure — it is **not** part of the current pipeline.
@@ -176,16 +176,73 @@ python scripts/evaluate_detector.py --weights runs/train/pest_yolo11m/weights/be
 Prints the aggregate metrics plus a **per-class table sorted by weakest recall**,
 and points to the `confusion_matrix.png` for the 18-way breakdown.
 
+## Run the full pipeline (4K image → pests)
+
+The app: drop in a high-res orchard photo, get back the same image annotated with
+pest boxes + species, and a coordinate list. It chains all three models —
+SAHI-tiled leaf detection (Stage 1/2) → crop each leaf → pest detection (Stage 3)
+→ reproject the pest box onto the 4K image.
+
+**Setup — place both trained models** where the config expects them (paths in
+[`configs/pipeline.yaml`](configs/pipeline.yaml)):
+
+```
+models/best.pt                        <- Stage-1 leaf detector  (leaf_weights)
+models/pest_yolo11m6/weights/best.pt  <- Stage-3 pest detector  (pest_weights)
+```
+
+**Run:**
+
+```bash
+python scripts/detect_pests_pipeline.py --source path/to/4k_image_or_folder
+# CPU machine / tune sensitivity:
+python scripts/detect_pests_pipeline.py --source orchard.jpg --device cpu --pest-conf 0.4
+```
+
+Outputs under `runs/pipeline/`:
+- `annotated/<stem>.jpg` — the 4K image with pest boxes + `species conf` labels
+- `predictions/<stem>.json` — every pest: full-image bbox, species, confidence, parent leaf box
+- `predictions/<stem>.txt` — `species conf x1 y1 x2 y2` per line
+- `summary.json` — per-image leaf/pest counts
+
+**Two knobs that matter:**
+- `--leaf-conf` (default 0.25) — lower to catch more leaves (the gate). 
+- `--pest-conf` (default 0.35) — the pest model has **no "healthy" class**, so this
+  threshold is what stops clean leaves from being labelled. Raise it for fewer,
+  higher-confidence pest calls; lower it to surface more.
+
+> **Scope of the result:** detections are **leaf-level** — the pest box equals the
+> leaf region, labelled with the species. The pest model was trained on pest
+> *close-ups* but receives whole-leaf crops here (a domain gap), so expect to tune
+> `--pest-conf` on your real images; a small fine-tune on real leaf crops would
+> tighten it further. Tight per-insect boxes would need pest data with localized
+> boxes + a healthy class (a future dataset task).
+
+## How this maps to the assignment
+
+| # | Task | Where |
+|---|------|-------|
+| 1 | Analyse existing datasets | PlantDoc (leaves) + IP02 (pests) |
+| 2 | Build own set via transfer-data | `main.py` (PlantDoc subset+remap); IP02 18-class subset |
+| 3 | Augmentation + class balancing | online aug in train configs; `scripts/balance_pest_classes.py` |
+| 4 | YOLO11m to extract leaves | Stage 1 — `train_detector.py` + `configs/leaf_detection.yaml` |
+| 5 | Process 4K images by slicing | `scripts/detect_leaves_sahi.py` (SAHI) |
+| 6 | Second YOLO11m for pests on leaves | Stage 3 + the full pipeline `scripts/detect_pests_pipeline.py` |
+| 7 | Report (metrics, confusion matrix, …) | *deferred* — plots already emitted under each run dir |
+
 ## Layout
 
 ```
 configs/leaf_detection.yaml      Stage-1 training hyperparameters
 configs/pest_detection.yaml      Stage-3 training hyperparameters (18 classes)
 configs/sahi_inference.yaml      Stage-2 SAHI inference parameters
+configs/pipeline.yaml            full-pipeline config (both models + thresholds)
 scripts/train_detector.py        generic config-driven trainer (Stages 1 & 3)
 scripts/evaluate_detector.py     generic YOLO.val() + per-class metrics table
 scripts/detect_leaves_sahi.py    Stage-2: SAHI sliced leaf detection -> crops + manifests
 scripts/balance_pest_classes.py  Stage-3: offline minority-class augmentation (train split)
+scripts/detect_pests_pipeline.py THE APP: 4K image -> leaves -> pests -> annotated 4K + coords
+models/                          place trained best.pt weights here (git-ignored)
 dataset/                         Stage-1: PlantDoc fruit-tree subset (single `leaf` class)
 YOLO_Fruit_Pests_dataset/        Stage-3: IP02 fruit-pest subset (18 classes)
 main.py                          one-off: subset + remap PlantDoc labels to class 0

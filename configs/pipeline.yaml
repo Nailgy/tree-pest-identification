@@ -1,0 +1,25 @@
+# End-to-end pipeline config — 4K image -> leaf gate (SAHI) -> pest detection.
+# Consumed by scripts/detect_pests_pipeline.py.
+
+# --- Models (best.pt from Stage 1 and Stage 3; paths resolved from repo root) ---
+leaf_weights: models/best.pt                        # Stage-1 leaf detector
+pest_weights: models/pest_yolo11m6/weights/best.pt  # Stage-3 pest detector
+device: cuda:0                                       # use `cpu` on a machine without an NVIDIA GPU
+
+# --- Stage 1: leaf detection via SAHI (slice the 4K image into 416 tiles) -------
+slice_height: 416
+slice_width: 416
+overlap_height_ratio: 0.2
+overlap_width_ratio: 0.2
+leaf_conf: 0.25                 # leaf-detection confidence (lower -> catch more leaves)
+perform_standard_pred: true     # also run one full-image pass for leaves larger than a tile
+postprocess_type: GREEDYNMM
+postprocess_match_metric: IOS
+postprocess_match_threshold: 0.5
+crop_padding: 0.05              # pad each leaf box by 5% before cropping (context for the pest model)
+
+# --- Stage 3: pest detection on each leaf crop ----------------------------------
+pest_imgsz: 416
+pest_conf: 0.35                 # min confidence to call a leaf "infested"; below this the leaf is
+                                #   treated as having no confident pest (the model has no 'healthy'
+                                #   class, so this threshold is what keeps clean leaves unlabelled)
