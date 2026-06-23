@@ -226,6 +226,30 @@ Outputs under `runs/pipeline/`:
 > tighten it further. Tight per-insect boxes would need pest data with localized
 > boxes + a healthy class (a future dataset task).
 
+### Alternative: pests without the leaf gate
+
+`scripts/detect_pests_sahi.py` runs the **pest model directly** on the image via SAHI
+— no leaf detection. It slices into tiles and detects on each, **and** (via
+`perform_standard_pred`) detects on the whole image downscaled to tile size, which
+catches a large / close-up pest that fills much of the frame. Same outputs and
+folder-batch behaviour as the main pipeline.
+
+```bash
+python scripts/detect_pests_sahi.py --source path/to/image_or_folder
+# tune / CPU / tiles-only:
+python scripts/detect_pests_sahi.py --source img.jpg --device cpu --pest-conf 0.6 --slice 512 --no-full-image
+```
+
+Defaults live in [`configs/pest_sahi.yaml`](configs/pest_sahi.yaml); every key is
+also overridable on the CLI (`--pest-conf`, `--slice`, `--overlap`, `--device`,
+`--no-full-image`).
+
+> **Trade-off:** without the leaf gate, background tiles also reach the pest model
+> (which has no "healthy" class), so this produces **more false positives** than the
+> gated pipeline. Keep `--pest-conf` high (≈0.5–0.6). Use the gated
+> `detect_pests_pipeline.py` when precision matters; use this when leaves are hard to
+> detect or the pest is a full-frame close-up.
+
 ## How this maps to the assignment
 
 | # | Task | Where |
@@ -245,11 +269,13 @@ configs/leaf_detection.yaml      Stage-1 training hyperparameters
 configs/pest_detection.yaml      Stage-3 training hyperparameters (18 classes)
 configs/sahi_inference.yaml      Stage-2 SAHI inference parameters
 configs/pipeline.yaml            full-pipeline config (both models + thresholds)
+configs/pest_sahi.yaml           leaf-free direct pest SAHI config
 scripts/train_detector.py        generic config-driven trainer (Stages 1 & 3)
 scripts/evaluate_detector.py     generic YOLO.val() + per-class metrics table
 scripts/detect_leaves_sahi.py    Stage-2: SAHI sliced leaf detection -> crops + manifests
 scripts/balance_pest_classes.py  Stage-3: offline minority-class augmentation (train split)
 scripts/detect_pests_pipeline.py THE APP: 4K image -> leaves -> pests -> annotated 4K + coords
+scripts/detect_pests_sahi.py     leaf-free variant: slices + full-image -> pests directly
 models/                          place trained best.pt weights here (git-ignored)
 dataset/                         Stage-1: PlantDoc fruit-tree subset (single `leaf` class)
 YOLO_Fruit_Pests_dataset/        Stage-3: IP02 fruit-pest subset (18 classes)

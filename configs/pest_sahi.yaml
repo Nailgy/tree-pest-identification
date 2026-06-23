@@ -1,0 +1,28 @@
+# Direct pest detection on high-res images via SAHI — NO leaf gate.
+# Consumed by scripts/detect_pests_sahi.py. The image is sliced into tiles and the
+# pest model runs on each tile; with perform_standard_pred the whole image is also
+# downscaled to tile size and detected directly (catches large / close-up pests that
+# fill much of the frame). All detections are merged to full-image coordinates.
+#
+# NOTE: without the leaf gate, every tile (incl. sky/bark/soil) reaches the pest
+# model, which has NO 'healthy' class — expect more false positives than the
+# leaf-gated pipeline (detect_pests_pipeline.py). Keep pest_conf relatively high.
+
+pest_weights: models/pest_yolo11m6/weights/best.pt   # Stage-3 pest detector (resolved from repo root)
+device: cuda:0                                        # use `cpu` on a machine without an NVIDIA GPU
+
+# --- Slicing (pest model native size = 416) -------------------------------------
+slice_height: 416
+slice_width: 416
+overlap_height_ratio: 0.2
+overlap_width_ratio: 0.2
+perform_standard_pred: true     # full-image-downscaled pass for large / close-up pests
+
+# --- Merge of overlapping detections --------------------------------------------
+postprocess_type: GREEDYNMM
+postprocess_match_metric: IOS
+postprocess_match_threshold: 0.5
+
+# --- Detection threshold --------------------------------------------------------
+pest_imgsz: 416                 # model inference size (= slice size)
+pest_conf: 0.5                  # min confidence for a pest detection (raise to cut false positives)
